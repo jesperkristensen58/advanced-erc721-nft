@@ -619,6 +619,14 @@
   "resolved" "https://registry.npmjs.org/@openzeppelin/contracts/-/contracts-4.8.0.tgz"
   "version" "4.8.0"
 
+"@openzeppelin/merkle-tree@^1.0.1":
+  "integrity" "sha512-t3D49zshHMV5gJGmD10CTQ4V41JIwWhLQ0btSLmkZLLZSMjLvZKMDDGcI7p2xuLQMjtrOucgf5usgHQIfQ7jUg=="
+  "resolved" "https://registry.npmjs.org/@openzeppelin/merkle-tree/-/merkle-tree-1.0.1.tgz"
+  "version" "1.0.1"
+  dependencies:
+    "@ethersproject/abi" "^5.7.0"
+    "ethereum-cryptography" "^1.1.2"
+
 "@scure/base@~1.1.0":
   "integrity" "sha512-ZxOhsSyxYwLJj3pLZCefNitxsj093tb2vq90mp2txoYeBqbcjDjqFhyM8eUjq/uFm6zJ+mUuqxlS2FkuSY1MTA=="
   "resolved" "https://registry.npmjs.org/@scure/base/-/base-1.1.1.tgz"
@@ -1915,6 +1923,16 @@
     "setimmediate" "^1.0.5"
 
 "ethereum-cryptography@^1.0.3":
+  "integrity" "sha512-XDSJlg4BD+hq9N2FjvotwUET9Tfxpxc3kWGE2AqUG5vcbeunnbImVk3cj6e/xT3phdW21mE8R5IugU4fspQDcQ=="
+  "resolved" "https://registry.npmjs.org/ethereum-cryptography/-/ethereum-cryptography-1.1.2.tgz"
+  "version" "1.1.2"
+  dependencies:
+    "@noble/hashes" "1.1.2"
+    "@noble/secp256k1" "1.6.3"
+    "@scure/bip32" "1.1.0"
+    "@scure/bip39" "1.1.0"
+
+"ethereum-cryptography@^1.1.2":
   "integrity" "sha512-XDSJlg4BD+hq9N2FjvotwUET9Tfxpxc3kWGE2AqUG5vcbeunnbImVk3cj6e/xT3phdW21mE8R5IugU4fspQDcQ=="
   "resolved" "https://registry.npmjs.org/ethereum-cryptography/-/ethereum-cryptography-1.1.2.tgz"
   "version" "1.1.2"

@@ -23,6 +23,7 @@
     "typechain": "^8.1.1"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.8.0"
+    "@openzeppelin/contracts": "^4.8.0",
+    "@openzeppelin/merkle-tree": "^1.0.1"
   }
 }

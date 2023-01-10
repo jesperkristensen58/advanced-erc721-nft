@@ -1,6 +1,17 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("hardhat-gas-reporter");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.17",
+  solidity: "0.8.9",
+  settings: {
+      optimizer: {
+        enabled: true,
+        runs: 1000000,
+      },
+    },
+  gasReporter: {
+    enabled: true,
+    currency: 'USD'
+  }
 };
