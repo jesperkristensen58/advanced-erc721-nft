@@ -16,7 +16,9 @@ describe("AdvancedNFT", function () {
     const [owner, alice, bob] = await ethers.getSigners();
 
     // prepare the pre-sale to some random minters
-    const numMinters = 10; // create this many random minters of the NFT
+    // const numMinters = 5000; // create this many random minters of the NFT - we used this to compare gas prices (takes a long time to run)
+    const numMinters = 10; // number of pre-sale recipients
+
     const valuesMapping = [];
     const valuesBitmap = [];
     const mintersAsSigners = [];
