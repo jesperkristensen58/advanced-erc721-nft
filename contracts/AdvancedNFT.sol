@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
+import "hardhat/console.sol";
+
 /**
  * @notice An example Advanced NFT Contract showing two different ways of implementing the minting. Shows other advanced features as well.
  * @dev This contract will be deployed with 6 leading zeros as its address.
@@ -53,7 +55,7 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
      * @param proof the proof that msg.sender is allowlisted to mint.
      */
     function mintWithMapping(bytes32[] calldata proof)
-        external
+        public
         payable
         nonReentrant
     {
@@ -96,7 +98,7 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
      * @param ticketNumber the NFT ticket number the user is allowed to mint.
      */
     function mintWithBitMap(bytes32[] calldata proof, uint256 ticketNumber)
-        external
+        public
         payable
         nonReentrant
     {
@@ -128,6 +130,110 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
         require(MerkleProof.verify(proof, root, leaf), "Unauthorized mint!");
     }
 
+    /*******************************************************************************************************************
+                    COMMIT/REVEAL TO ASSOCIATE MINTED IDs TO FINAL TOKEN IDs (to avoid gaming the airdrop)
+    ********************************************************************************************************************/
+    struct Commit {
+        bytes32 commit; // the data (hash of the shift uint) committed
+        uint64 blockNumber; // the block number when the commit took place
+        uint256 revealed; // has the shift been revealed?
+    }
+
+    uint64 immutable REVEAL_BLOCK_DELTA = 10;
+    Commit public s_commit; // hold the "shift" commit/reveal scheme
+
+    event CommitHash(bytes32 shiftHash, uint64 blockNumber);
+    event Reveal(uint256 answerShift, bytes32 salt);
+
+    /**
+     * @notice Commit the shift imposed on the minted IDs to generate the actual tokenIds (or the NFT IDs)
+     * @notice The idea is to ensure that if we mint initially number 20 then later on this might be shifted to 122. So we can't predict what NFT we get.
+     * @dev Only the owner of the NFT can commit and reveal this.
+     * @param saltedShift the integer shift salted and hashed
+     */
+    function commit(bytes32 saltedShift) external onlyOwner {
+        s_commit.commit = saltedShift;
+        s_commit.blockNumber = uint64(block.number);
+        s_commit.revealed = 0;
+
+        emit CommitHash(s_commit.commit, s_commit.blockNumber);
+    }
+
+    /**
+     * @notice Create a salted hash of incoming data. Can also (and will be when generating the commit data) run off-chain.
+     * @param shift the shift to use for the NFT IDs, e.g., 400.
+     * @param salt the salt to use when hashing the data
+     * @return the salted hash of the incoming data
+     */
+    function createSaltedHash(uint256 shift, bytes32 salt) public view returns (bytes32) {
+        return keccak256(abi.encodePacked(address(this), shift, salt));
+    }
+
+    /**
+     * @notice Reveal the shift in minted IDs to create the finally assigned tokenIds.
+     * @param answerShift the shift to use which was committed previously.
+     * @param salt the salt used in the salted hash to create the original hashed shift.
+     */
+    function reveal(uint256 answerShift, bytes32 salt) external onlyOwner {
+        // make sure it hasn't been revealed yet and set it to revealed
+        require(s_commit.revealed == 0, "Already revealed!");
+        s_commit.revealed = 1;
+
+        // check that the reveal happens after at least 10 blocks:
+        require(uint64(block.number) >= s_commit.blockNumber + REVEAL_BLOCK_DELTA, "Reveal has to happen >=10 blocks from commit!");
+
+        // require that they can produce the committed hash
+        require(createSaltedHash(answerShift, salt) == s_commit.commit, "Revealed hash does not match original committed hash!");
+
+        emit Reveal(answerShift, salt);
+    }
+
+    /*****************************************************************************************
+                                MULTIDELEGATECALL
+    ******************************************************************************************/
+    // we use some custom errors:
+    error DelegatecallFailed();
+    error InvalidCall();
+
+    /**
+     * @notice Multi-transfer of NFTs via multi-delegatecall.
+     * @param data the data array specifying which NFTs need to be transferred between which parties.
+     */
+    function multiTransfer(
+        bytes[] memory data
+    ) external {
+        // only transferFrom can be called using this approach:
+        bytes4 approvedSelector = transferFrom.selector;
+
+        // perfrom the multi transfer:
+        for (uint i; i < data.length; i++) {
+            bytes4 thisSelector = bytes4(data[i]);
+
+            if (thisSelector != approvedSelector) revert InvalidCall(); // revert everything if invalid data is used at all
+
+            (bool ok, ) = address(this).delegatecall(data[i]);
+            if (!ok) revert DelegatecallFailed();
+        }
+    }
+
+    /**
+     * @notice Helper function to get call data for the caller
+     * @param from the address to transfer from
+     * @param to the address to transfer to
+     * @param _tokenId the tokenId to transfer
+     * @return the signature of the transferFrom function
+     */
+    function helperGetCallData(address from, address to, uint256 _tokenId) external view returns (bytes memory) {
+        return abi.encodeWithSelector(transferFrom.selector, from, to, _tokenId);
+    }
+
+    /**
+     * @notice Helper function to get *WRONG* call data for the caller (for testing purposes).
+     * See mintWithBitMap for parameter documentation.
+     */
+    function helperGetWrongCallData(bytes32[] calldata proof, uint256 ticketNumber) external view returns (bytes memory) {
+        return abi.encodeWithSignature("mintWithBitMap(bytes32[],uint256)", proof, ticketNumber);
+    }
 
     /*****************************************************************************************
                                 HELPERS
