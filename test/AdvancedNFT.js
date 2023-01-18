@@ -507,4 +507,60 @@ describe("AdvancedNFT", function () {
     await expect(anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost})).to.be.revertedWith("Invalid Mint State!");
     expect(await anft2.balanceOf(minter.address)).to.equal("0");
   });
+
+  it("Should allow users to set a nickname for their NFT", async () => {
+    const { presaleMintersAsSigners, publicsaleMintersAsSigners, treeWithBitmap, anft2 } = await loadFixture(deployTokenFixture);
+
+    // we should be in presale state
+    expect(await anft2.state()).to.equal(0);
+
+    // we can't publicly mint during presale:
+    let minter = publicsaleMintersAsSigners[0]; // pick a public minter
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    await expect(anft2.connect(minter).mint({value: cost})).to.be.revertedWith("Invalid Mint State!");
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    
+    // now mint all presales
+    let num = 0;
+    for (const minter of presaleMintersAsSigners) {
+      // find the Merkle proof of minter:
+      let proof;
+      let ticketNumber;
+      for (const [i, v] of treeWithBitmap.entries()) {
+        if (v[0] === minter.address) {
+          proof = treeWithBitmap.getProof(i);
+          ticketNumber = v[1];
+          break;
+        }
+      }
+      // now use that - this should work:
+      expect(await anft2.balanceOf(minter.address)).to.equal("0");
+      await anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost});
+      expect(await anft2.balanceOf(minter.address)).to.equal("1");
+
+      num += 1;
+
+      // confirm we are still in presale state:
+      if (num < 8) { // we have 8 presales
+        expect(await anft2.state()).to.equal(0);
+      }
+
+      if (num >= 8) {
+        break;
+      }
+    }
+
+    // now that we have minted a few NFTs, let's set some nicknames:
+    expect(await anft2.tokenURI(0)).to.equal("");
+
+    await anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "hello world!");
+    expect(await anft2.tokenURI(0)).to.equal("hello world!");
+    expect(await anft2.nickName(0)).to.equal("hello world!");
+
+    await anft2.connect(presaleMintersAsSigners[1]).setNickname(1, "❓❓❓");
+    expect(await anft2.tokenURI(1)).to.equal("❓❓❓");
+
+    // but if a user does not own the nft they can't set the nickname:
+    await expect(anft2.connect(presaleMintersAsSigners[0]).setNickname(1, "❓")).to.be.revertedWith("Not Owner!");
+  });
 });

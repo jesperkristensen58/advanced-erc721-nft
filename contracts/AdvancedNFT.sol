@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
@@ -14,7 +15,7 @@ import "hardhat/console.sol";
  * @dev This contract will be deployed with 6 leading zeros as its address.
  * @dev We leverage the Merkle Tree generation library by OZ here: https://github.com/OpenZeppelin/merkle-tree
  */
-contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
+contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
     /*****************************************************************************************
                                             SETUP
     ******************************************************************************************/
@@ -301,6 +302,42 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
      */
     function _afterTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize) internal virtual override {
         require(tokenId <= totalSupply);
+    }
+    
+    /*****************************************************************************************
+                                ENABLE SETTING NFT NICKNAMES
+    ******************************************************************************************/
+    /**
+     * @notice Ensure the burn function is implemented. On burn, we need to clear the tokenURI storage.
+     * @param _tokenId The tokenId being burned.
+     */
+    function _burn(uint256 _tokenId) internal virtual override(ERC721, ERC721URIStorage) {
+        super._burn(_tokenId);
+    }
+
+    /**
+     * @notice Return the token URI (the Nickname) for a given Token ID. This is the NFT Nickname the user chose.
+     * @param _tokenId The tokenId to get the `nickname` of.
+     */
+    function tokenURI(uint256 _tokenId) public view virtual override(ERC721, ERC721URIStorage) returns (string memory) {
+        return super.tokenURI(_tokenId);
+    }
+
+    /**
+     * @notice Return the token URI (the Nickname) for a given Token ID. This is the NFT Nickname the user chose.
+     * @param _tokenId The tokenId to get the `nickname` of.
+     */
+    function nickName(uint256 _tokenId) public view returns (string memory) {
+        return tokenURI(_tokenId);
+    }
+
+    /**
+     * @notice An NFT owner can set the nickname of their NFT.
+     * @param _tokenId The tokenId to set a `nickname` for.
+     */
+    function setNickname(uint256 _tokenId, string memory nickname) public {
+        require(msg.sender == ownerOf(_tokenId), "Not Owner!");
+        _setTokenURI(_tokenId, nickname);
     }
 
     /*****************************************************************************************
