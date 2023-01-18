@@ -562,5 +562,19 @@ describe("AdvancedNFT", function () {
 
     // but if a user does not own the nft they can't set the nickname:
     await expect(anft2.connect(presaleMintersAsSigners[0]).setNickname(1, "❓")).to.be.revertedWith("Not Owner!");
+
+    // the nickname cannot be more than 20 characters long:
+    // 20 characters does not revert:
+    await anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "12345678901234567890");
+
+    // but 21 does:
+    await expect(anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "123456789012345678901")).to.be.revertedWith("Nickname must be at least 20 characters!");
+
+    // try with unicode characters too:
+    // 20 chars should not revert:
+    await anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓");
+
+    // but 21 does revert:
+    await expect(anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓")).to.be.revertedWith("Nickname must be at least 20 characters!");
   });
 });

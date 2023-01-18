@@ -337,7 +337,41 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
      */
     function setNickname(uint256 _tokenId, string memory nickname) public {
         require(msg.sender == ownerOf(_tokenId), "Not Owner!");
+        // impose a length restriction on the nickname:
+        require(strlen(nickname) <= 20, "Nickname must be at least 20 characters!");
+
+        // set the nickname:
         _setTokenURI(_tokenId, nickname);
+    }
+
+    /**
+     * @dev Returns the length of a given string
+     * @dev from: https://github.com/ensdomains/ens-contracts/blob/master/contracts/ethregistrar/StringUtils.sol
+     *
+     * @param s The string to measure the length of
+     * @return The length of the input string
+     */
+    function strlen(string memory s) internal pure returns (uint256) {
+        uint256 len;
+        uint256 i = 0;
+        uint256 bytelength = bytes(s).length;
+        for (len = 0; i < bytelength; len++) {
+            bytes1 b = bytes(s)[i];
+            if (b < 0x80) {
+                i += 1;
+            } else if (b < 0xE0) {
+                i += 2;
+            } else if (b < 0xF0) {
+                i += 3;
+            } else if (b < 0xF8) {
+                i += 4;
+            } else if (b < 0xFC) {
+                i += 5;
+            } else {
+                i += 6;
+            }
+        }
+        return len;
     }
 
     /*****************************************************************************************
