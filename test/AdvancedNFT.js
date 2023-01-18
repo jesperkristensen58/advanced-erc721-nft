@@ -18,17 +18,16 @@ describe("AdvancedNFT", function () {
 
     // prepare the pre-sale to some random minters
     // const numMinters = 5000; // create this many random minters of the NFT - we used this to compare gas prices (takes a long time to run)
-    const numMinters = 10; // number of pre-sale recipients
+    const numPresaleMinters = 10; // number of pre-sale recipients
 
     const valuesMapping = [];
     const valuesBitmap = [];
-    const mintersAsSigners = [];
-    
-    for (let i = 0; i < numMinters; i++) {
+    const presaleMintersAsSigners = [];
+    for (let i = 0; i < numPresaleMinters; i++) {
       let signer = ethers.Wallet.createRandom().connect(hre.ethers.provider); // a minter
       valuesMapping.push([signer.address]);
       valuesBitmap.push([signer.address, i]);
-      mintersAsSigners.push(signer);
+      presaleMintersAsSigners.push(signer);
 
       // send some funds to this minter so that they can mint later on in the tests...
       await hre.network.provider.send("hardhat_setBalance", [
@@ -36,6 +35,19 @@ describe("AdvancedNFT", function () {
         "0x8ac7230489e80000" // give a lot of ether
       ]);
     }
+
+    const publicsaleMintersAsSigners = [];
+    for (let i = 0; i < 14; i++) {
+      let signer = ethers.Wallet.createRandom().connect(hre.ethers.provider); // a minter
+      publicsaleMintersAsSigners.push(signer);
+
+      // send some funds to this minter so that they can mint later on in the tests...
+      await hre.network.provider.send("hardhat_setBalance", [
+        signer.address,
+        "0x8ac7230489e80000" // give a lot of ether
+      ]);
+    }
+
     const treeWithBitmap = StandardMerkleTree.of(valuesBitmap, ["address", "uint256"]);
     console.log('Merkle Root for "Bitmap" Presale: ', treeWithBitmap.root);
 
@@ -43,13 +55,13 @@ describe("AdvancedNFT", function () {
     console.log('Merkle Root for "Mapping" Presale: ', treeWithMapping.root);
 
     const ANFT = await ethers.getContractFactory("AdvancedNFT");
-    const anft1 = await ANFT.deploy("mapping", "MAP", treeWithMapping.root);
+    const anft1 = await ANFT.deploy("mapping", "MAP", treeWithMapping.root, 8, 20); // let's use 8 for presale (and we have prepared 10 minters above to test invalid mints later)
     await anft1.deployed();
 
-    const anft2 = await ANFT.deploy("bitmap", "BMP", treeWithBitmap.root);
+    const anft2 = await ANFT.deploy("bitmap", "BMP", treeWithBitmap.root, 8, 20);
     await anft2.deployed();
 
-    return { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, mintersAsSigners, owner, alice, bob };
+    return { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, presaleMintersAsSigners, publicsaleMintersAsSigners, owner, alice, bob };
   }
 
   describe("Deployment", async () => {
@@ -68,7 +80,7 @@ describe("AdvancedNFT", function () {
 
   describe("Advanced NFT", function () {
     it("Mapping: Should mint at an ether cost", async function () {
-      const { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, mintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
+      const { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, presaleMintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
 
       expect(await anft1.balanceOf(owner.address)).to.equal("0")
       expect(await anft1.balanceOf(alice.address)).to.equal("0")
@@ -78,7 +90,7 @@ describe("AdvancedNFT", function () {
       await expect(anft1.ownerOf(0)).to.be.revertedWith("ERC721: invalid token ID");
 
       // pick a minter
-      const minter1 = mintersAsSigners[0];
+      const minter1 = presaleMintersAsSigners[0];
 
       // shouldn't be possible without sending funds
       await expect(anft1.connect(minter1).mintWithMapping([])).to.be.revertedWith("Insufficient funds!");
@@ -101,7 +113,7 @@ describe("AdvancedNFT", function () {
       expect(await anft1.balanceOf(minter1.address)).to.equal("1");
 
       // but minter2 should not be able to when using the same proof and parameters:
-      const minter2 = mintersAsSigners[1];
+      const minter2 = presaleMintersAsSigners[1];
       expect(await anft1.balanceOf(minter2.address)).to.equal("0");
       expect(await anft1.balanceOf(minter1.address)).to.equal("1"); // minter1 ofc should not change its holdings
       await expect(anft1.connect(minter2).mintWithMapping(proof, {value: cost})).to.be.revertedWith("Unauthorized mint!");
@@ -111,7 +123,7 @@ describe("AdvancedNFT", function () {
 
     it("BitMap: Should mint at an ether cost", async function () {
       // now mint but using the Bitmap approach
-      const { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, mintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
+      const { anft1, anft2, treeWithBitmap, treeWithMapping, valuesBitmap, valuesMapping, presaleMintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
 
       expect(await anft2.balanceOf(owner.address)).to.equal("0")
       expect(await anft2.balanceOf(alice.address)).to.equal("0")
@@ -121,7 +133,7 @@ describe("AdvancedNFT", function () {
       await expect(anft2.ownerOf(0)).to.be.revertedWith("ERC721: invalid token ID");
 
       // pick a minter
-      const minter1 = mintersAsSigners[0];
+      const minter1 = presaleMintersAsSigners[0];
 
       // shouldn't be possible without sending funds
       await expect(anft2.connect(minter1).mintWithBitMap([], 0)).to.be.revertedWith("Insufficient funds!");
@@ -147,7 +159,7 @@ describe("AdvancedNFT", function () {
       expect(await anft2.balanceOf(minter1.address)).to.equal("1");
 
       // but minter2 should not be able to when using the same proof and parameters:
-      const minter2 = mintersAsSigners[1];
+      const minter2 = presaleMintersAsSigners[1];
       expect(await anft2.balanceOf(minter2.address)).to.equal("0");
       expect(await anft2.balanceOf(minter1.address)).to.equal("1"); // minter1 ofc should not change its holdings
       await expect(anft2.connect(minter2).mintWithBitMap(proof, ticketNumber, {value: cost})).to.be.revertedWith("Unauthorized mint!");
@@ -157,9 +169,10 @@ describe("AdvancedNFT", function () {
   });
 
   it("Mapping: Should mint a lot of NFTs and test the gas", async function() {
-    const { mintersAsSigners, treeWithMapping, anft1 } = await loadFixture(deployTokenFixture);
+    const { presaleMintersAsSigners, treeWithMapping, anft1 } = await loadFixture(deployTokenFixture);
 
-    for (const minter of mintersAsSigners) {
+    let num = 0;
+    for (const minter of presaleMintersAsSigners) {
       // find the Merkle proof of minter1:
       let proof;
       for (const [i, v] of treeWithMapping.entries()) {
@@ -172,13 +185,20 @@ describe("AdvancedNFT", function () {
       expect(await anft1.balanceOf(minter.address)).to.equal("0");
       await anft1.connect(minter).mintWithMapping(proof, {value: cost});
       expect(await anft1.balanceOf(minter.address)).to.equal("1");
+
+      num += 1;
+
+      if (num == 8) {
+        break;
+      }
     }
   });
 
   it("Bitmap: Should mint a lot of NFTs and test the gas", async function() {
-    const { mintersAsSigners, treeWithBitmap, anft2 } = await loadFixture(deployTokenFixture);
+    const { presaleMintersAsSigners, treeWithBitmap, anft2 } = await loadFixture(deployTokenFixture);
     
-    for (const minter of mintersAsSigners) {
+    let num = 0;
+    for (const minter of presaleMintersAsSigners) {
       // find the Merkle proof of minter1:
       let proof;
       let ticketNumber;
@@ -193,18 +213,23 @@ describe("AdvancedNFT", function () {
       expect(await anft2.balanceOf(minter.address)).to.equal("0");
       await anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost});
       expect(await anft2.balanceOf(minter.address)).to.equal("1");
+      num += 1;
+
+      if (num == 8) {
+        break;
+      }
     }
   });
 
   it("should not allow to mint more than 1 NFT per minter", async function() {
-    const { anft1, treeWithMapping, mintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
+    const { anft1, treeWithMapping, presaleMintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
 
     expect(await anft1.balanceOf(owner.address)).to.equal("0")
     expect(await anft1.balanceOf(alice.address)).to.equal("0")
     expect(await anft1.balanceOf(bob.address)).to.equal("0")
 
     // pick a minter
-    const minter1 = mintersAsSigners[0];
+    const minter1 = presaleMintersAsSigners[0];
 
     // find the Merkle proof of minter1:
     let proof;
@@ -224,14 +249,14 @@ describe("AdvancedNFT", function () {
   });
 
   it("should allow minters to transfer NFTs to anyone", async function() {
-    const { anft1, treeWithMapping, mintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
+    const { anft1, treeWithMapping, presaleMintersAsSigners, owner, alice, bob } = await loadFixture(deployTokenFixture);
 
     expect(await anft1.balanceOf(owner.address)).to.equal("0")
     expect(await anft1.balanceOf(alice.address)).to.equal("0")
     expect(await anft1.balanceOf(bob.address)).to.equal("0")
 
     // pick a minter
-    const minter1 = mintersAsSigners[0];
+    const minter1 = presaleMintersAsSigners[0];
     
     // find the Merkle proof of minter1:
     let proof;
@@ -249,7 +274,7 @@ describe("AdvancedNFT", function () {
     expect(await anft1.ownerOf(0)).to.equal(minter1.address);
 
     // transfer to some other account
-    const minter2 = mintersAsSigners[1];
+    const minter2 = presaleMintersAsSigners[1];
     let tx = await anft1.connect(minter1).transferFrom(minter1.address, minter2.address, 0);
     await tx.wait();
 
@@ -262,7 +287,7 @@ describe("AdvancedNFT", function () {
   });
 
   it("Should enable the commit/reveal scheme", async () => {
-    const { anft1, owner, alice, bob } = await loadFixture(deployTokenFixture);
+    const { anft1, owner, alice } = await loadFixture(deployTokenFixture);
 
     let answer = 4;
     const salt = "0x4444444444444444444444444444444444444444444444444444444444444444";
@@ -295,11 +320,11 @@ describe("AdvancedNFT", function () {
   });
 
   it("Should enable multitransfer via multidelegatecall", async () => {
-    const { anft2, owner, alice, mintersAsSigners, treeWithBitmap } = await loadFixture(deployTokenFixture);
+    const { anft2, alice, presaleMintersAsSigners, treeWithBitmap } = await loadFixture(deployTokenFixture);
 
       await expect(anft2.ownerOf(0)).to.be.revertedWith("ERC721: invalid token ID");
       // pick a minter
-      const minter1 = mintersAsSigners[0];
+      const minter1 = presaleMintersAsSigners[0];
 
       // find the Merkle proof of minter1:
       let proof;
@@ -332,8 +357,8 @@ describe("AdvancedNFT", function () {
 
       // let's transfer multiple NFTs
       // pick a minter
-      const minter2 = mintersAsSigners[1];
-      const minter3 = mintersAsSigners[2];
+      const minter2 = presaleMintersAsSigners[1];
+      const minter3 = presaleMintersAsSigners[2];
 
       // find the Merkle proof of minter1:
       let proof2;
@@ -387,5 +412,99 @@ describe("AdvancedNFT", function () {
 
       // pick any person to make the wrong call:
       await expect(anft2.connect(minter1).multiTransfer([wrongCallData])).to.be.revertedWithCustomError(anft2, "InvalidCall");
+  });
+
+  it("Should check that the State Machine works", async () => {
+    const { presaleMintersAsSigners, publicsaleMintersAsSigners, treeWithBitmap, anft2 } = await loadFixture(deployTokenFixture);
+
+    // we should be in presale state
+    expect(await anft2.state()).to.equal(0);
+
+    // we can't publicly mint during presale:
+    let minter = publicsaleMintersAsSigners[0]; // pick a public minter
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    await expect(anft2.connect(minter).mint({value: cost})).to.be.revertedWith("Invalid Mint State!");
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    
+    // now mint all presales
+    let num = 0;
+    for (const minter of presaleMintersAsSigners) {
+      // find the Merkle proof of minter:
+      let proof;
+      let ticketNumber;
+      for (const [i, v] of treeWithBitmap.entries()) {
+        if (v[0] === minter.address) {
+          proof = treeWithBitmap.getProof(i);
+          ticketNumber = v[1];
+          break;
+        }
+      }
+      // now use that - this should work:
+      expect(await anft2.balanceOf(minter.address)).to.equal("0");
+      await anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost});
+      expect(await anft2.balanceOf(minter.address)).to.equal("1");
+
+      num += 1;
+
+      // confirm we are still in presale state:
+      if (num < 8) { // we have 8 presales
+        expect(await anft2.state()).to.equal(0);
+      }
+
+      if (num >= 8) {
+        break;
+      }
+    }
+
+    // we are in a public sale now:
+    expect(await anft2.state()).to.equal(1);
+
+    // pick a fresh presale minter (who didn't make the presale):
+    minter = presaleMintersAsSigners[9]
+    // find the Merkle proof of minter:
+    let proof;
+    let ticketNumber;
+    for (const [i, v] of treeWithBitmap.entries()) {
+      if (v[0] === minter.address) {
+        proof = treeWithBitmap.getProof(i);
+        ticketNumber = v[1];
+        break;
+      }
+    }
+
+    // we can't mint in a presale state:
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    await expect(anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost})).to.be.revertedWith("Invalid Mint State!");
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+
+    // since we have 20 total nfts, mint another 10 in a public way now - they don't need proofs:
+    num = 0;
+    for (const minter of publicsaleMintersAsSigners) {
+      expect(await anft2.balanceOf(minter.address)).to.equal("0");
+      await anft2.connect(minter).mint({value: cost});
+      expect(await anft2.balanceOf(minter.address)).to.equal("1");
+
+      num += 1;
+
+      if (num == 12) {
+        break;
+      }
+
+      expect(await anft2.state()).to.equal(1); // public state
+    }
+
+    // now we have run out of supply
+    expect(await anft2.state()).to.equal(2); // out of supply state
+
+    // we can't mint anymore
+    minter = publicsaleMintersAsSigners[13]; // pick a minter not used
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    await expect(anft2.connect(minter).mint({value: cost})).to.be.revertedWith("Invalid Mint State!");
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+
+    // still cannot presale mint of course:
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
+    await expect(anft2.connect(minter).mintWithBitMap(proof, ticketNumber, {value: cost})).to.be.revertedWith("Invalid Mint State!");
+    expect(await anft2.balanceOf(minter.address)).to.equal("0");
   });
 });

@@ -18,6 +18,7 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
     /*****************************************************************************************
                                             SETUP
     ******************************************************************************************/
+    uint256 immutable totalSupply;
     uint256 tokenId;
     // the merkle tree; pre-computed and stored during construction
     bytes32 private root;
@@ -35,15 +36,26 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
      * @param symbol the symbol of the NFT
      * @param _root the Merkle tree allowlist root (addresses in this tree are allowed to min the NFT)
      */
-    constructor(string memory name, string memory symbol, bytes32 _root)
+    constructor(string memory name, string memory symbol, bytes32 _root, uint256 _preSaleSupply, uint256 _totalSupply)
         ERC721(name, symbol)
     {
+        require(_totalSupply > 0, "Invalid Total Supply!");
+
         root = _root; // use OZ's javascript library to create the Merkle tree
 
-        // Make sure at least 5000 bits are available (aka support a total mint of 5000).
-        // Each slot is 32 bytes = 256 bits. So 5000 / 256 = 19.53125, we need 20 slots set to 1
-        for (uint256 i = 0; i < 20; i++)
-            hasMintedBitmap._data[i] = type(uint256).max; // set all bits to 1 in this bucket
+        // // USE THIS TO TEST GAS SAVINGS - WE WANT A LARGE COLLECTION OF 5,000:
+        // // Make sure at least 5000 bits are available (aka support a total mint of 5000).
+        // // Each slot is 32 bytes = 256 bits. So 5000 / 256 = 19.53125, we need 20 slots set to 1
+        // for (uint256 i = 0; i < 20; i++)
+        //     hasMintedBitmap._data[i] = type(uint256).max; // set all bits to 1 in this bucket
+        
+        // for simplicity, keep the collection small
+        totalSupply = _totalSupply;
+
+        for (uint256 i = 0; i < _preSaleSupply; i++)
+            hasMintedBitmap.set(i);
+        
+        state = SaleState.PRESALE; // start in presale state
     }
     
     /*****************************************************************************************
@@ -58,12 +70,8 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
         public
         payable
         nonReentrant
+        checkMintIsAllowed(SaleState.PRESALE)
     {
-        // make it impossible for smart contracts to mint
-        require(_msgSender() == tx.origin, "Smart contracts are not allowed to mint!");
-        // NFTs should have a nonzero ether cost so that you can withdraw the funds later.
-        require(msg.value >= COST, "Insufficient funds!");
-
         _verifyWithMapping(proof); // is the caller on the allowlist? Check Merkle tree
 
         // they are allowed to mint; but did they already mint in the past?
@@ -101,12 +109,8 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
         public
         payable
         nonReentrant
+        checkMintIsAllowed(SaleState.PRESALE)
     {
-        // make it impossible for smart contracts to mint
-        require(_msgSender() == tx.origin, "Smart contracts are not allowed to mint!");
-        // NFTs should have a nonzero ether cost so that you can withdraw the funds later.
-        require(msg.value >= COST, "Insufficient funds!");
-
         _verifyWithBitmap(proof, ticketNumber); // is the caller on the allowlist? Check Merkle tree
 
         require(hasMintedBitmap.get(ticketNumber), "User has already minted!");
@@ -128,6 +132,26 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
     {
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_msgSender(), bitmapIndex)))); // note the`verifyWithMapping` function which just uses the address
         require(MerkleProof.verify(proof, root, leaf), "Unauthorized mint!");
+    }
+
+    /*******************************************************************************************************************
+                                        PUBLIC MINTING
+    ********************************************************************************************************************/
+    function mint()
+        public
+        payable
+        nonReentrant
+        checkMintIsAllowed(SaleState.PUBLIC)
+    {
+        // make it impossible for smart contracts to mint
+        require(_msgSender() == tx.origin, "Smart contracts are not allowed to mint!");
+        // NFTs should have a nonzero ether cost so that you can withdraw the funds later.
+        require(msg.value >= COST, "Insufficient funds!");
+
+        (bool sent, ) = address(this).call{value: msg.value}(""); // use with non-reentrant
+        require(sent, "Payment for the NFT failed!");
+
+        return _mint(_msgSender(), tokenId++);
     }
 
     /*******************************************************************************************************************
@@ -233,6 +257,50 @@ contract AdvancedNFT is ERC721, ReentrancyGuard, Ownable {
      */
     function helperGetWrongCallData(bytes32[] calldata proof, uint256 ticketNumber) external view returns (bytes memory) {
         return abi.encodeWithSignature("mintWithBitMap(bytes32[],uint256)", proof, ticketNumber);
+    }
+
+    /*****************************************************************************************
+                                            STATE MACHINE
+    ******************************************************************************************/
+    // use a state machine to determine which sale state is relevant
+    enum SaleState{ PRESALE, PUBLIC, NOSUPPLY }
+    SaleState public state;
+
+    /**
+     * @notice Check inputs and confirm that we are in the correct minting state.
+     * @param _state the minting state the contract is in (e.g., SaleState.PRESALE)
+     * @dev the state machine is written via an enum. See `SaleState`.
+     */
+    modifier checkMintIsAllowed(SaleState _state) {
+        // (1) check inputs:
+        // make it impossible for smart contracts to mint
+        require(_msgSender() == tx.origin, "Smart contracts are not allowed to mint!");
+        // NFTs should have a nonzero ether cost so that you can withdraw the funds later.
+        require(msg.value >= COST, "Insufficient funds!");
+
+        // (2) check the state and confirm we are allowed to mint
+        if(_state != state || state == SaleState.NOSUPPLY) {
+            revert("Invalid Mint State!");
+        }
+        
+        _;
+
+        // after minting, make sure to update the state:
+        if (state == SaleState.PRESALE && hasMintedBitmap._data[0] == 0) {
+            // flip to public sale
+            state = SaleState.PUBLIC;
+        }
+
+        if (state == SaleState.PUBLIC && tokenId == totalSupply) {
+            state = SaleState.NOSUPPLY;
+        }
+    }
+
+    /**
+     * @dev Sanity check.
+     */
+    function _afterTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize) internal virtual override {
+        require(tokenId <= totalSupply);
     }
 
     /*****************************************************************************************
