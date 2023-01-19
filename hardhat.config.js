@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("hardhat-gas-reporter");
+require('dotenv').config()
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -16,5 +17,14 @@ module.exports = {
   },
   mocha: {
     timeout: 1000000000
+  },
+  networks: {
+    polygon: {
+      url: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts: [process.env.POLYGON_PRIVATE_KEY]
+    }
+  },
+  etherscan: {
+    apiKey: process.env.POLYSCAN_API_KEY,
   },
 };

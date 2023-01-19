@@ -8,8 +8,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @notice An example Advanced NFT Contract showing two different ways of implementing the minting. Shows other advanced features as well.
  * @dev This contract will be deployed with 6 leading zeros as its address.
@@ -378,7 +376,7 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
                                 HELPERS
     ******************************************************************************************/
     /**
-     * @notice The owner can withdraw all funds received in this contract.
+     * @notice The contract owner can withdraw all funds received in this contract.
      * @dev Sends all contract funds to the caller.
      */
     function withdraw()
