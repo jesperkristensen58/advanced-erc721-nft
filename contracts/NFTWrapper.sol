@@ -6,38 +6,46 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "./AdvancedNFT.sol";
 
 /**
  * @notice An NFT wrapper contract: Receive ERC721 and get an ERC1155 in return. Vice versa works as well.
+ * @dev This is assumed to be used with the `AdvancedNFT.sol` contract.
  */
-contract Wrapper is IERC721Receiver {
+contract NFTWrapper is ERC1155, IERC721Receiver {
     /*****************************************************************************************
                                             SETUP
     ******************************************************************************************/
+    address payable immutable advancedNFT;
 
-    mapping(address => mapping(uint256 => bool)) collectionsWrapped;
-    mapping(address => address) mapCollectionToERC1155;
+    /**
+     * @notice Contruct the wrapper against the deployed advanced NFT collection.
+     */
+    constructor (address payable _advancedNFT) ERC1155("Wrapped NFT") {
+        advancedNFT = _advancedNFT;
+    }
 
-    constructor () {}
+    /**
+     * @notice Wrap the ERC721 NFT and receive an ERC1155 in return.
+     */
+    function wrap(uint256 tokenId) external {
+        require(balanceOf(msg.sender, tokenId) == 0, "Already wrapped!");
 
-    // function wrap(ERC721 nft, uint256 tokenId) external {
-    //     // transfer ERC721 to this contract - this also confirms ownership:
-    //     nft.safeTransferFrom(msg.sender, address(this), tokenId);
+        // transfer ERC721 to this contract - this also confirms ownership:
+        AdvancedNFT(advancedNFT).safeTransferFrom(msg.sender, address(this), tokenId);
+        
+        _mint(msg.sender, tokenId, 1, ""); // just mint 1
 
-    //     require(!collectionsWrapped[address(nft)][tokenId], "Already wrapped!");
-    //     collectionsWrapped[address(nft)][tokenId] = true;
+        assert(balanceOf(msg.sender, tokenId) == 1);
+    }
 
-    //     address erc1155;
-    //     if (mapCollectionToERC1155[address(nft)] == address(0)) {
-    //         erc1155 = address(new ERC1155(ERC721(nft).name()));
-    //     } else {
-    //         erc1155 = mapCollectionToERC1155[address(nft)];
-    //     }
-    //     IERC1155(erc1155)._mint(msg.sender, tokenId, 1, "");
-    // }
+    function unwrap(uint256 tokenId) external {
+        require(balanceOf(msg.sender, tokenId) == 1, "Not the owner!");
 
-    function unwrap() external {
-
+        _burn(msg.sender, tokenId, 1);
+        AdvancedNFT(advancedNFT).safeTransferFrom(address(this), msg.sender, tokenId);
+        
+        assert(balanceOf(msg.sender, tokenId) == 0);
     }
 
     /**

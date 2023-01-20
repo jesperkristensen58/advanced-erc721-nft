@@ -303,7 +303,7 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
     }
     
     /*****************************************************************************************
-                                ENABLE SETTING NFT NICKNAMES
+                                ENABLE USERS TO SET NFT NICKNAMES
     ******************************************************************************************/
     /**
      * @notice Ensure the burn function is implemented. On burn, we need to clear the tokenURI storage.

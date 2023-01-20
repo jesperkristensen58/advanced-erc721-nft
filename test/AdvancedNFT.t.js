@@ -1,8 +1,6 @@
 const {
-  time,
-  loadFixture,
+  loadFixture
 } = require("@nomicfoundation/hardhat-network-helpers");
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
 const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
 const hre = require("hardhat");
@@ -576,5 +574,31 @@ describe("AdvancedNFT", function () {
 
     // but 21 does revert:
     await expect(anft2.connect(presaleMintersAsSigners[0]).setNickname(0, "❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓❓")).to.be.revertedWith("Nickname must be at least 20 characters!");
+  });
+
+  it("Should allow only the owner to withdraw funds", async () => {
+    const { anft2, alice, owner } = await loadFixture(deployTokenFixture);
+
+    // send some funds to the contract:
+    await hre.network.provider.send("hardhat_setBalance", [
+      anft2.address,
+      "0x8ac7230489e80000"
+    ]);
+
+    // anyone can't withdraw:
+    await expect(anft2.connect(alice).withdraw()).to.be.revertedWith("Ownable: caller is not the owner");
+
+    // but the owner can:
+    let bal1 = await anft2.provider.getBalance(owner.address);
+    await anft2.connect(owner).withdraw();
+    let bal2 = await anft2.provider.getBalance(owner.address);
+    expect(bal2 - bal1).to.be.greaterThan(0);
+
+    // and not calling owner explicitly is the same:
+    await hre.network.provider.send("hardhat_setBalance", [
+      anft2.address,
+      "0x8ac7230489e80000"
+    ]);
+    await anft2.withdraw();
   });
 });
