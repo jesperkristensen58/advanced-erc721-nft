@@ -626,5 +626,7 @@ describe("AdvancedNFT", function () {
 
     // Try calling any function to ensure things are working properly:
     expect(await thevanitydeployedcontract.numberOfLeadingHexZeros(thevanitydeployedcontract.address)).to.equal(targetNumZeroes);
+
+    // the next step would then be to transfer ownership to the multisig (not shown here, but that's easy via TransferOwnership(...))
   });
 });
