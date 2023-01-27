@@ -601,4 +601,30 @@ describe("AdvancedNFT", function () {
     ]);
     await anft2.withdraw();
   });
+
+  it.only("Should deploy to predetermined address", async () => {
+    const { anft2 } = await loadFixture(deployTokenFixture);
+
+    // you can put whatever target number of zeroes you want
+    let targetNumZeroes = 3;
+    result = await anft2.mineAddress(anft2.address, targetNumZeroes, 0); // the loops=0 (last param, just says: loop until you find it; you'd run this offline in general)
+    
+    // the address that was mined for is (look at the returned args from mineAddress if in doubt):
+    let addressMined = result[1];
+    console.log(addressMined);
+
+    // now that we have the address with the given number of zeros, we can deploy a clone of the existing contract to it:
+    // @dev note that this pattern might be strange and perhaps we should use a "factory" instead to deploy the anft2s to vanity addresses
+    // but the intent here is just to show how one could do this - so right now the anft2 actually can clone itself and deploy to any vanity address you want:
+    await expect(anft2.launchContract(result[0])).to.emit(anft2, "EfficientContractLaunched").withArgs(addressMined);
+
+    // ensure the deployed contract at the vanity address is correct
+    const ANFT2 = await ethers.getContractFactory("AdvancedNFT");
+    const thevanitydeployedcontract = await ANFT2.attach(
+      addressMined // The deployed contract vanity address
+    );
+
+    // Try calling any function to ensure things are working properly:
+    expect(await thevanitydeployedcontract.numberOfLeadingHexZeros(thevanitydeployedcontract.address)).to.equal(targetNumZeroes);
+  });
 });

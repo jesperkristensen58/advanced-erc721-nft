@@ -22,7 +22,10 @@ module.exports = {
     polygon: {
       url: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
       accounts: [process.env.POLYGON_PRIVATE_KEY]
-    }
+    },
+    hardhat: {
+      allowUnlimitedContractSize: true
+  },
   },
   etherscan: {
     apiKey: process.env.POLYSCAN_API_KEY,

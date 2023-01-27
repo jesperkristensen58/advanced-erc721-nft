@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 
 /**
  * @notice An example Advanced NFT Contract showing two different ways of implementing the minting. Shows other advanced features as well.
@@ -17,6 +18,7 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
     /*****************************************************************************************
                                             SETUP
     ******************************************************************************************/
+    using Clones for address;
     uint256 immutable totalSupply;
     uint256 tokenId;
     // the merkle tree; pre-computed and stored during construction
@@ -228,7 +230,7 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
         // only transferFrom can be called using this approach:
         bytes4 approvedSelector = transferFrom.selector;
 
-        // perfrom the multi transfer:
+        // perform the multi transfer:
         for (uint i; i < data.length; i++) {
             bytes4 thisSelector = bytes4(data[i]);
 
@@ -370,6 +372,105 @@ contract AdvancedNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
             }
         }
         return len;
+    }
+
+    /*****************************************************************************************
+                                DEPLOY TO EFFICIENT ADDRESS
+    ******************************************************************************************/
+    event EfficientContractLaunched(address theAddress);
+
+    function launchContract(
+        uint256 nonce
+    ) external {
+        address theAddress = address(this).cloneDeterministic(_getSalt(nonce));
+        
+        emit EfficientContractLaunched(theAddress);
+    }
+
+    function mineAddress(
+        address implementation,
+        uint256 minTarget,
+        uint256 loops
+    ) external view returns (uint256, address) {
+        // Create the new proxy clone for pool management
+        // Set the pool address (can only be done once)
+        address newPoolAddress;
+        uint256 numZeroes = 0;
+        uint256 nonce = 0;
+        uint256 nonceOut = 0;
+
+        while (true) {
+            // get the address we will obtain when using clonedeterministic with this salt value
+            newPoolAddress = implementation.predictDeterministicAddress(
+                _getSalt(nonce)
+            );
+            numZeroes = numberOfLeadingHexZeros(newPoolAddress);
+
+            if (numZeroes >= minTarget) {
+                // desired target met
+                nonceOut = nonce;
+                break;
+            }
+            unchecked {
+                ++nonce;
+            }
+
+            if (loops > 0 && nonce > loops) revert("Didn't reach target in time");
+        }
+        return (nonceOut, newPoolAddress);
+    }
+
+    function _getSalt(uint256 nonce) internal pure returns (bytes32) {
+        return bytes32(abi.encode(nonce));
+    }
+
+    /**
+     * @notice Get the number of leading hex characters in an address.
+            0x0000bababaab...     0xababababab...
+                 ▲                 ▲
+                 │                 │
+            4 leading hex      0 leading hex
+            character zeros    character zeros
+    
+     * @param addr the address to get the number of leading zero hex characters for.
+     * @return the number of leading zero hex characters in the address
+     */
+    function numberOfLeadingHexZeros(address addr) public pure returns (uint256) {
+        return (159 - mostSignificantBit(uint256(uint160(addr)))) / 4;
+    }
+
+    function mostSignificantBit(uint256 x) internal pure returns (uint8 r) {
+        require(x > 0);
+
+        if (x >= 0x100000000000000000000000000000000) {
+            x >>= 128;
+            r += 128;
+        }
+        if (x >= 0x10000000000000000) {
+            x >>= 64;
+            r += 64;
+        }
+        if (x >= 0x100000000) {
+            x >>= 32;
+            r += 32;
+        }
+        if (x >= 0x10000) {
+            x >>= 16;
+            r += 16;
+        }
+        if (x >= 0x100) {
+            x >>= 8;
+            r += 8;
+        }
+        if (x >= 0x10) {
+            x >>= 4;
+            r += 4;
+        }
+        if (x >= 0x4) {
+            x >>= 2;
+            r += 2;
+        }
+        if (x >= 0x2) r += 1;
     }
 
     /*****************************************************************************************
