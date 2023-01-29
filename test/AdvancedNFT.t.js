@@ -619,14 +619,13 @@ describe("AdvancedNFT", function () {
     await expect(anft2.launchContract(result[0])).to.emit(anft2, "EfficientContractLaunched").withArgs(addressMined);
 
     // ensure the deployed contract at the vanity address is correct
-    const ANFT2 = await ethers.getContractFactory("AdvancedNFT");
-    const thevanitydeployedcontract = await ANFT2.attach(
-      addressMined // The deployed contract vanity address
-    );
+    // we attach to the contract below saying "the contract at address addressMined is an AdvancedNFT contract":
+    const thevanitydeployedcontract = await hre.ethers.getContractAt("AdvancedNFT", addressMined);
 
-    // Try calling any function to ensure things are working properly:
+    // Try calling any function to ensure things are working properly on the newly deployed vanity-address contract:
     expect(await thevanitydeployedcontract.numberOfLeadingHexZeros(thevanitydeployedcontract.address)).to.equal(targetNumZeroes);
 
     // the next step would then be to transfer ownership to the multisig (not shown here, but that's easy via TransferOwnership(...))
+    // you can create the multisig on Polygon here: https://safe.global/
   });
 });
